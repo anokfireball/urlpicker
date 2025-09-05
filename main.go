@@ -21,6 +21,11 @@ var urlRegex = regexp.MustCompile(
 		`]+`,
 )
 
+// Git SSH URL pattern: user@host:path.git
+var gitSSHRegex = regexp.MustCompile(
+	`[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+\.git`,
+)
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	seen := make(map[string]struct{})
@@ -38,17 +43,73 @@ func main() {
 	}
 }
 
+func convertGitURLToWeb(input string) (string, bool) {
+	// Check if it's a Git SSH URL
+	if gitSSHRegex.MatchString(input) {
+		// Parse SSH format: user@host:path.git
+		parts := strings.Split(input, "@")
+		if len(parts) != 2 {
+			return "", false
+		}
+
+		hostAndPath := parts[1]
+		colonIndex := strings.Index(hostAndPath, ":")
+		if colonIndex == -1 {
+			return "", false
+		}
+
+		host := hostAndPath[:colonIndex]
+		path := hostAndPath[colonIndex+1:]
+
+		// Remove .git suffix
+		if strings.HasSuffix(path, ".git") {
+			path = strings.TrimSuffix(path, ".git")
+		}
+
+		return fmt.Sprintf("https://%s/%s", host, path), true
+	}
+
+	// Check if it's an HTTPS URL with .git suffix
+	if strings.HasPrefix(input, "http") && strings.HasSuffix(input, ".git") {
+		return strings.TrimSuffix(input, ".git"), true
+	}
+
+	return "", false
+}
+
 func extractURLs(input string) []string {
-	matches := urlRegex.FindAllString(input, -1)
-	if len(matches) == 0 {
+	// Extract regular HTTP/HTTPS URLs
+	httpMatches := urlRegex.FindAllString(input, -1)
+
+	// Extract Git SSH URLs
+	sshMatches := gitSSHRegex.FindAllString(input, -1)
+
+	// Combine all matches
+	allMatches := append(httpMatches, sshMatches...)
+
+	if len(allMatches) == 0 {
 		return nil
 	}
 
-	urls := make([]string, 0, len(matches))
-	for _, raw := range matches {
-		url := sanitizeURL(raw)
-		if url != "" {
-			urls = append(urls, url)
+	seen := make(map[string]struct{})
+	urls := make([]string, 0, len(allMatches))
+
+	for _, raw := range allMatches {
+		var finalURL string
+
+		// Try to convert as Git URL first
+		if webURL, isGit := convertGitURLToWeb(raw); isGit {
+			finalURL = webURL
+		} else {
+			// Handle as regular HTTP URL
+			finalURL = sanitizeURL(raw)
+		}
+
+		if finalURL != "" {
+			if _, exists := seen[finalURL]; !exists {
+				seen[finalURL] = struct{}{}
+				urls = append(urls, finalURL)
+			}
 		}
 	}
 	return urls
