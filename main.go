@@ -11,15 +11,12 @@ func main() {
 }
 
 func process(r io.Reader, w io.Writer) {
-	input, err := io.ReadAll(r)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
-		os.Exit(1)
-	}
-
-	urls := ExtractURLs(string(input))
-
-	for _, url := range urls {
+	err := ExtractURLs(r, func(url string) {
 		fmt.Fprintf(w, "%s\n", url)
+	})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error processing input: %v\n", err)
+		os.Exit(1)
 	}
 }

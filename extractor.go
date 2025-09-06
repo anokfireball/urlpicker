@@ -1,41 +1,43 @@
 package main
 
 import (
+	"bufio"
+	"io"
 	"net/url"
 	"regexp"
 	"strings"
 )
 
 var (
-	// More inclusive URL character sets that support international domains
-	urlChar = `[a-zA-Z0-9._~:/?#[\]@!$&'()*+,;=%-]|\p{L}|\p{N}` // Valid URL chars + Unicode letters/numbers
+	urlCharASCII   = `[a-zA-Z0-9._~:/?#[\]@!$&'()*+,;=%-]` // Standard ASCII URL characters
+	urlCharUnicode = `\p{L}|\p{N}`                         // Unicode letters and numbers
+	urlChar        = urlCharASCII + `|` + urlCharUnicode   // Combined character class
 
-	// URL pattern components
-	schemeStart = `[a-zA-Z]`             // Scheme must start with a letter
-	schemeRest  = `[a-zA-Z0-9+.-]*`      // Scheme can contain letters, digits, +, -, .
-	schemeSep   = `://`                  // Standard URL scheme separator
-	urlRest     = `(?:` + urlChar + `)+` // Authority + path (specific URL characters, not just non-whitespace)
+	schemeStart = `[a-zA-Z]`                                     // Scheme must start with a letter
+	schemeRest  = `[a-zA-Z0-9+.-]*`                              // Scheme can contain letters, digits, +, -, .
+	schemeSep   = `://`                                          // Standard URL scheme separator
+	urlRest     = `(?:` + urlChar + `)+`                         // Authority + path (specific URL characters, not just non-whitespace)
+	standardURL = schemeStart + schemeRest + schemeSep + urlRest // Standard URL: scheme://authority+path
 
-	// SCP-style Git remote pattern components
-	gitUser    = `[a-zA-Z0-9_.-]+`            // Git username (letters, digits, underscore, dot, dash)
-	gitUserSep = `@`                          // User separator
-	gitHost    = `[a-zA-Z0-9_.-]+`            // Git hostname (letters, digits, underscore, dot, dash)
-	gitPathSep = `:`                          // Path separator (not //, distinguishes from URL)
-	gitPath    = `[a-zA-Z0-9_./-]+(?:\.git)?` // Repository path (specific characters common in Git paths)
+	gitUser    = `[a-zA-Z0-9_.-]+`                                     // Git username (letters, digits, underscore, dot, dash)
+	gitUserSep = `@`                                                   // User separator
+	gitHost    = `[a-zA-Z0-9_.-]+`                                     // Git hostname (letters, digits, underscore, dot, dash)
+	gitPathSep = `:`                                                   // Path separator (not //, distinguishes from URL)
+	gitPath    = `[a-zA-Z0-9_./-]+(?:\.git)?`                          // Repository path (specific characters common in Git paths)
+	scpGitURL  = gitUser + gitUserSep + gitHost + gitPathSep + gitPath // SCP Git: user@host:path
 
-	standardURL = schemeStart + schemeRest + schemeSep + urlRest        // Standard URL: scheme://authority+path
-	scpGitURL   = gitUser + gitUserSep + gitHost + gitPathSep + gitPath // SCP Git: user@host:path
-
-	combinedRegex = regexp.MustCompile(`(?:` + standardURL + `|` + scpGitURL + `)`)
+	combinedPattern = `(?:` + standardURL + `|` + scpGitURL + `)`
+	combinedRegex   = regexp.MustCompile(combinedPattern)
 )
 
-func ExtractURLs(text string) []string {
-	var results []string
-	seen := make(map[string]bool)
+func findURLs(text string, callback func(string)) {
+	indices := combinedRegex.FindAllStringIndex(text, -1)
 
-	matches := combinedRegex.FindAllString(text, -1)
-	for _, match := range matches {
-		trimmed := TrimWrapperPunctuation(match)
+	for _, match := range indices {
+		start, end := match[0], match[1]
+		rawMatch := text[start:end]
+
+		trimmed := TrimWrapperPunctuation(rawMatch)
 
 		var final string
 		if IsGitRemote(trimmed) {
@@ -65,11 +67,30 @@ func ExtractURLs(text string) []string {
 			continue
 		}
 
-		if !seen[final] {
-			results = append(results, final)
-			seen[final] = true
-		}
+		callback(final)
+	}
+}
+
+func ExtractURLs(reader io.Reader, callback func(string)) error {
+	scanner := bufio.NewScanner(reader)
+
+	// Increase buffer size to handle large lines (default is ~64KB)
+	const maxTokenSize = 10 * 1024 * 1024 // 10MB
+	buf := make([]byte, maxTokenSize)
+	scanner.Buffer(buf, maxTokenSize)
+
+	seen := make(map[string]bool)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		findURLs(line, func(url string) {
+			if !seen[url] {
+				seen[url] = true
+				callback(url)
+			}
+		})
 	}
 
-	return results
+	return scanner.Err()
 }
