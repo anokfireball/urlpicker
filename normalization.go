@@ -31,8 +31,8 @@ func NormalizeHost(host string) string {
 	return hostPart + portPart
 }
 
-func RemoveCredentials(urlStr string) string {
-	if IsGitRemote(urlStr) {
+func RemoveCredentials(urlStr string, enableGitRemotes bool) string {
+	if enableGitRemotes && IsGitRemote(urlStr) {
 		if transformed, ok := TransformGitRemote(urlStr); ok {
 			return transformed
 		}
@@ -49,9 +49,9 @@ func RemoveCredentials(urlStr string) string {
 	return u.String()
 }
 
-func NormalizeURL(urlStr string) string {
+func NormalizeURL(urlStr string, enableGitRemotes bool) string {
 	trimmed := TrimWrapperPunctuation(urlStr)
-	withoutCreds := RemoveCredentials(trimmed)
+	withoutCreds := RemoveCredentials(trimmed, enableGitRemotes)
 
 	u, err := url.Parse(withoutCreds)
 	if err != nil {

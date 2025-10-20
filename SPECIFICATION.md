@@ -2,32 +2,32 @@
 
 ## Purpose
 
-**urlpicker** is a command-line utility that extracts syntactically valid absolute URLs from arbitrary plain text and transforms Git remote specifications into human-navigable HTTPS repository URLs.
+**urlpicker** is a command-line utility that extracts syntactically valid absolute URLs from arbitrary plain text with optional Git remote transformation support.
 
 ### Primary Goals
 - Extract all RFC 3986 compliant absolute URLs from stdin
-- Transform Git remote forms to canonical HTTPS repository URLs
+- Optionally transform Git remote forms to canonical HTTPS repository URLs (requires `-git` flag)
 - Output normalized URLs to stdout, one per line
 - Provide deterministic, high-performance processing of terminal buffers and logs
 
 ### Interface Contract
 - **Input**: Complete stdin stream (UTF-8 text)
 - **Output**: Newline-delimited normalized URLs to stdout
-- **Interaction**: Zero - no flags, prompts, or configuration
+- **Interaction**: Optional `-git` flag to enable Git remote transformation; no prompts or configuration
 - **Exit Code**: 0 on success, non-zero only on fatal I/O errors
 
 ## Scope & References
 
 ### In Scope
 - **RFC 3986** absolute URIs: `https://tools.ietf.org/rfc/rfc3986.txt`
-- **Git URL formats** per official documentation: `https://git-scm.com/docs/git-clone#_git_urls`
-- Git remote transformation to canonical repository web URLs
+- **Git URL formats** per official documentation: `https://git-scm.com/docs/git-clone#_git_urls` (opt-in with `-git` flag)
+- Optional Git remote transformation to canonical repository web URLs
 - Deduplication of URLs
 
 ### Out of Scope
 - Content retractions (e.g. credential removal)
 - Relative URLs or schemeless hostnames
-- Interactive usage, configuration files, or command-line flags
+- Interactive usage or configuration files
 - Network validation or content fetching
 - Metadata output (JSON, confidence scores, offsets)
 - Branch/path inference beyond repository root
@@ -77,7 +77,7 @@
 - Authority must contain valid host for hierarchical URIs
 - Other schemes (ftp, file, mailto, etc.) are excluded by design
 
-**FR-DETECT-2**: Detect Git remote forms
+**FR-DETECT-2**: Detect Git remote forms (opt-in with `-git` flag)
 ```
 # SCP-like
 git@github.com:owner/repo.git
@@ -91,6 +91,7 @@ git://host/path/to/repo.git
 # HTTPS/HTTP
 https://github.com/owner/repo.git
 ```
+**Note**: Git remote detection and transformation only occurs when the `-git` flag is provided. Without this flag, only standard HTTP(S) URLs are extracted.
 
 **FR-DETECT-3**: Candidate boundary rules
 - Terminate at first unescaped whitespace or control character (≤ 0x1F, 0x7F)
@@ -115,7 +116,9 @@ https://github.com/owner/repo.git
 
 ### Git Remote Transformation (FR-GIT)
 
-**FR-GIT-1**: SCP-like transformation
+**Note**: All Git remote transformation features require the `-git` command-line flag. Without this flag, only standard HTTP(S) URLs are extracted, and Git remote formats are ignored.
+
+**FR-GIT-1**: SCP-like transformation (requires `-git` flag)
 ```
 Input:  git@github.com:owner/repo.git
 Output: https://github.com/owner/repo
@@ -189,11 +192,12 @@ Output: https://gitlab.com/group/project
 ### Extraction Pipeline
 1. **Scan Phase**: Identify candidate substrings using pattern matching
 2. **Classification**: Distinguish generic URLs from Git remote forms
-3. **Validation**: Apply RFC 3986 syntax checks for generic URLs
-4. **Transformation**: Convert Git remotes to canonical HTTPS form
-5. **Normalization**: Apply host case, trimming, ...
-6. **Deduplication**: Remove duplicates while preserving order
-7. **Output**: Emit one URL per line
+3. **Git Check**: If `-git` flag not provided, skip Git remote processing
+4. **Validation**: Apply RFC 3986 syntax checks for generic URLs
+5. **Transformation**: Convert Git remotes to canonical HTTPS form (if `-git` enabled)
+6. **Normalization**: Apply host case, trimming, ...
+7. **Deduplication**: Remove duplicates while preserving order
+8. **Output**: Emit one URL per line
 
 ### Normalization Order
 1. Extract candidate with boundary detection
@@ -214,12 +218,13 @@ Output: https://gitlab.com/group/project
 - **UT-5**: Credential removal from userinfo
 
 ### Git Remote Tests (GRT)
-- **GRT-1**: SCP-like parsing and transformation
-- **GRT-2**: SSH scheme handling with ports and users
-- **GRT-3**: Git protocol conversion
-- **GRT-4**: HTTPS remote normalization
-- **GRT-5**: Nested group/organization paths
-- **GRT-6**: Edge cases (no .git, trailing slashes)
+- **GRT-1**: SCP-like parsing and transformation (with `-git` flag)
+- **GRT-2**: SSH scheme handling with ports and users (with `-git` flag)
+- **GRT-3**: Git protocol conversion (with `-git` flag)
+- **GRT-4**: HTTPS remote normalization (with `-git` flag)
+- **GRT-5**: Nested group/organization paths (with `-git` flag)
+- **GRT-6**: Edge cases (no .git, trailing slashes) (with `-git` flag)
+- **GRT-7**: Git remotes ignored when `-git` flag not provided
 
 ### Integration Tests (IT)
 - **IT-1**: Mixed URL and remote input
@@ -261,6 +266,7 @@ Output: https://example.com/path...
 
 ### Git Remote Transformations
 ```
+# With -git flag:
 Input:  git@github.com:facebook/react.git
 Output: https://github.com/facebook/react
 
@@ -272,15 +278,22 @@ Output: https://kernel.org/pub/scm/git/git
 
 Input:  https://bitbucket.org/atlassian/stash.git
 Output: https://bitbucket.org/atlassian/stash
+
+# Without -git flag (default):
+Input:  git@github.com:facebook/react.git
+Output: (no output - Git remote ignored)
 ```
 
 ### Credential Handling
 ```
+# Standard URLs always processed:
 Input:  https://user:token@api.github.com/repos
 Output: https://api.github.com/repos
 
+# Git remotes require -git flag:
 Input:  deploy@server.com:apps/myapp.git  
-Output: https://server.com/apps/myapp
+Output: https://server.com/apps/myapp (with -git flag)
+Output: (no output without -git flag)
 ```
 
 ### Internationalization
@@ -298,6 +311,11 @@ Input:  http://              # Missing host
 
 ### Deduplication
 ```
+# With -git flag:
+Input:  git@github.com:user/repo.git and https://github.com/user/repo
+Output: https://github.com/user/repo
+
+# Without -git flag:
 Input:  git@github.com:user/repo.git and https://github.com/user/repo
 Output: https://github.com/user/repo
 ```
@@ -369,7 +387,8 @@ Output: https://github.com/user/repo
 
 ### Functional Acceptance
 - [ ] All RFC 3986 absolute URLs extracted correctly
-- [ ] Git remote forms transformed to navigable HTTPS URLs
+- [ ] Git remote forms transformed to navigable HTTPS URLs (when `-git` flag provided)
+- [ ] Git remote forms ignored when `-git` flag not provided
 - [ ] Wrapper punctuation properly trimmed
 - [ ] Credentials removed from all outputs
 - [ ] Deduplication preserves first-occurrence order

@@ -30,7 +30,7 @@ var (
 	combinedRegex   = regexp.MustCompile(combinedPattern)
 )
 
-func findURLs(text string, callback func(string)) {
+func findURLs(text string, callback func(string), enableGitRemotes bool) {
 	indices := combinedRegex.FindAllStringIndex(text, -1)
 
 	for _, match := range indices {
@@ -40,14 +40,14 @@ func findURLs(text string, callback func(string)) {
 		trimmed := TrimWrapperPunctuation(rawMatch)
 
 		var final string
-		if IsGitRemote(trimmed) {
+		if enableGitRemotes && IsGitRemote(trimmed) {
 			if transformed, ok := TransformGitRemote(trimmed); ok {
 				final = transformed
 			} else {
 				continue
 			}
 		} else {
-			normalized := NormalizeURL(trimmed)
+			normalized := NormalizeURL(trimmed, enableGitRemotes)
 			u, err := url.Parse(normalized)
 			if err != nil {
 				continue
@@ -71,11 +71,10 @@ func findURLs(text string, callback func(string)) {
 	}
 }
 
-func ExtractURLs(reader io.Reader, callback func(string)) error {
+func ExtractURLs(reader io.Reader, callback func(string), enableGitRemotes bool) error {
 	scanner := bufio.NewScanner(reader)
 
-	// Increase buffer size to handle large lines (default is ~64KB)
-	const maxTokenSize = 10 * 1024 * 1024 // 10MB
+	const maxTokenSize = 10 * 1024 * 1024
 	buf := make([]byte, maxTokenSize)
 	scanner.Buffer(buf, maxTokenSize)
 
@@ -89,7 +88,7 @@ func ExtractURLs(reader io.Reader, callback func(string)) error {
 				seen[url] = true
 				callback(url)
 			}
-		})
+		}, enableGitRemotes)
 	}
 
 	return scanner.Err()

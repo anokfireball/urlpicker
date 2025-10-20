@@ -1,12 +1,12 @@
 # URLPicker
 
-A high-performance URL extractor and normalizer that intelligently extracts URLs from text input with Git remote support and credential removal.
+A high-performance URL extractor and normalizer that intelligently extracts URLs from text input with optional Git remote support and credential removal.
 
 ## Features
 
 - Extracts HTTP and HTTPS URLs from any text format (logs, terminal output, documents)
 - Automatically removes credentials from URLs to prevent leaks
-- Converts Git remote formats (SSH, SCP-like, HTTPS) to browsable HTTPS URLs
+- Optionally converts Git remote formats (SSH, SCP-like, HTTPS) to browsable HTTPS URLs with `-git` flag
 - RFC 3986 compliant with host normalization and deduplication
 - High performance: 19+ MB/s throughput with sub-millisecond processing
 - **Stream-optimized**: Memory-efficient processing with immediate URL output
@@ -24,19 +24,28 @@ go build .
 ## Usage
 
 ```bash
-# Extract URLs from text
+# Extract URLs from text (Git remotes ignored by default)
 echo "Check out https://example.com and git@github.com:user/repo.git" | ./urlpicker
+# Output:
+# https://example.com
+
+# Enable Git remote transformation with -git flag
+echo "Check out https://example.com and git@github.com:user/repo.git" | ./urlpicker -git
 # Output:
 # https://example.com
 # https://github.com/user/repo
 
 # Process logs or command output
 docker logs my-app | urlpicker
-git remote -v | urlpicker
+git remote -v | urlpicker -git
 
 # Process large files efficiently
 cat large-file.txt | urlpicker
 ```
+
+## Command-line Flags
+
+- `-git`: Enable Git remote transformation (default: disabled). When enabled, converts SSH/SCP-like Git remotes (e.g., `git@github.com:user/repo.git`) to HTTPS URLs (e.g., `https://github.com/user/repo`).
 
 ## Architecture
 
@@ -49,7 +58,7 @@ URLPicker uses a **stream-optimized architecture** by default:
 ## Key Capabilities
 
 - **URL Normalization**: Host lowercasing, credential removal, punctuation trimming
-- **Git Remote Support**: Converts all Git formats to HTTPS URLs
+- **Git Remote Support** (optional): Converts all Git formats to HTTPS URLs when `-git` flag is enabled
 - **Security**: Zero credential leakage, safe processing of any input
 - **Performance**: O(n) linear time complexity, stream-optimized for minimal allocations
 - **Scalability**: Handles arbitrarily large inputs with constant memory usage
