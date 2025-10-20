@@ -1,4 +1,4 @@
-module urlpicker
+module github.com/anokfireball/urlpicker
 
 go 1.25.1
 

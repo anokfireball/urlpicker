@@ -15,8 +15,14 @@ A high-performance URL extractor and normalizer that intelligently extracts URLs
 
 ## Installation
 
+### Install via go install
 ```bash
-git clone <repository-url>
+go install github.com/anokfireball/urlpicker@latest
+```
+
+### Build from source
+```bash
+git clone https://github.com/anokfireball/urlpicker.git
 cd urlpicker
 go build .
 ```
