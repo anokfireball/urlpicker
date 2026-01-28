@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "groupName": "indirect Go dependencies"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["patch", "digest"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": true
+    }
+  ],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "platformAutomerge": true,
+  "ignoreTests": true
+}
