@@ -7,7 +7,8 @@
     {
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
-      "groupName": "indirect Go dependencies"
+      "groupName": "indirect Go dependencies",
+      "enabled": true
     },
     {
       "matchManagers": ["gomod"],
